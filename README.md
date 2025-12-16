@@ -168,6 +168,7 @@ Refer to the table below for the identifiers specified in `<format>` of `%date:<
   - [py/defs/ext/](py/defs/ext/)
 
 ## Change History
+- 2025/12/17 1.2.0 If the environment variable(`EAGLE_ASYNC_SEND`) is set, send to Eagle in a separate thread (experimental)
 - 2025/11/09 1.1.9 Fixed a bug where prompts were not saved in ComfyUI v0.3.68
 - 2025/11/09 1.1.8 Fixed a bug where prompts might not save. Fully supports workflows using loops.
 - 2025/11/06 1.1.7 Bug Fix for Node Analysis in ComfyUI-Easy-Use

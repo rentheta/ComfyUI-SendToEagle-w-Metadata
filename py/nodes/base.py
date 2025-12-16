@@ -1,6 +1,8 @@
 import json
 import os
 import re
+import threading
+import queue
 
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -22,6 +24,38 @@ from ..trace import Trace
 from ..defs.combo import SAMPLER_SELECTION_METHOD, TAG_PATTERN
 from ..utils.eagle_api import EagleAPI
 
+# グローバルな非同期送信キューとワーカースレッド
+_eagle_send_queue = None
+_eagle_worker_thread = None
+_eagle_worker_lock = threading.Lock()
+
+def _eagle_worker():
+    """FIFOキューからタスクを取り出して順次Eagle送信を実行するワーカー"""
+    global _eagle_send_queue
+    while True:
+        task = _eagle_send_queue.get()
+        if task is None:  # 終了シグナル
+            break
+        try:
+            eagle_api, data, folder_id, file_name = task
+            result = eagle_api.add_item_from_url(data=data, folder_id=folder_id)
+            print(f"[Eagle Async] Sent successfully: {file_name} - {result}")
+        except Exception as e:
+            print(f"[Eagle Async] Failed to send {file_name}: {e}")
+        finally:
+            _eagle_send_queue.task_done()
+
+def _enqueue_eagle_send(eagle_api, data, folder_id, file_name):
+    """非同期送信キューにタスクを追加（必要に応じてワーカー起動）"""
+    global _eagle_send_queue, _eagle_worker_thread
+    with _eagle_worker_lock:
+        if _eagle_send_queue is None:
+            _eagle_send_queue = queue.Queue()
+        if _eagle_worker_thread is None or not _eagle_worker_thread.is_alive():
+            _eagle_worker_thread = threading.Thread(target=_eagle_worker, daemon=True)
+            _eagle_worker_thread.start()
+    _eagle_send_queue.put((eagle_api, data, folder_id, file_name))
+
 class BaseNode:
     CATEGORY = "SendToEagle"
 
@@ -38,6 +72,7 @@ class SendToEagleWithMetadata(BaseNode):
         self.comfyui_url = os.environ.get("EAGLE_COMFYUI_URL", "http://localhost:8188") # No need to set for local machine
         self.timezone = os.environ.get("EAGLE_TIMEZONE", None) # ex. "Asia/Tokyo",  No need to set for local machine
         self.api_token = os.environ.get("EAGLE_API_TOKEN", None) # Go to Preferences > Developer Settings to generate and configure your API token.
+        self.async_send = os.environ.get("EAGLE_ASYNC_SEND", "") == "1" # Set to "1" to enable async sending via background thread
         self.eagle_api = EagleAPI(self.eagle_server_url, self.api_token)
 
     RETURN_TYPES = ("STRING", "INT", "IMAGE",)
@@ -265,7 +300,10 @@ class SendToEagleWithMetadata(BaseNode):
                 }
 
                 # Eagleに送る
-                self.eagle_api.add_item_from_url(data=item, folder_id=folder_id)
+                if self.async_send:
+                    _enqueue_eagle_send(self.eagle_api, item.copy(), folder_id, file_name)
+                else:
+                    self.eagle_api.add_item_from_url(data=item, folder_id=folder_id)
 
             results.append(
                 {"filename": file_name, "subfolder": subfolder, "type": self.type}
