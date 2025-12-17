@@ -81,7 +81,7 @@ def _enqueue_eagle_send(eagle_api, data, folder_id, file_name):
         if _eagle_send_queue is None:
             _eagle_send_queue = queue.Queue()
         if _eagle_worker_thread is None or not _eagle_worker_thread.is_alive():
-            _eagle_worker_thread = threading.Thread(target=_eagle_worker)
+            _eagle_worker_thread = threading.Thread(target=_eagle_worker, daemon=True)
             _eagle_worker_thread.start()
         # Put task in queue while holding lock to ensure worker sees it
         _eagle_send_queue.put((eagle_api, data, folder_id, file_name))
