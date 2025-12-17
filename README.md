@@ -158,6 +158,15 @@ Refer to the table below for the identifiers specified in `<format>` of `%date:<
 | Hashes              | Outputs the hash values of Model, Lora_`n`, and Embedding_`n` separated by commas (for [Civitai](https://civitai.com/))<br>Note: Output only when `calc_model_hash` is `true`                         |
 | (Additional metadata) | Unique metadata entered in `extra_metadata`                                                                                                                                                     |
 
+## Supported Nodes and Extensions
+- Metadata is obtained from the inputs of the KSampler node found by `sampler_selection_method` and the inputs of previously executed nodes
+  - The target KSampler nodes are the keys of `SAMPLERS` in [py/defs/samplers.py](py/defs/samplers.py) and files under [py/defs/ext/](py/defs/ext/)
+- Please check the following files for supported nodes.
+  - [py/defs/captures.py](py/defs/captures.py)
+  - [py/defs/samplers.py](py/defs/samplers.py)
+- Please check the following directory for supported extensions.
+  - [py/defs/ext/](py/defs/ext/)
+
 ## Asynchronous sending to Eagle (experimental)
 
 This extension can send items to Eagle in a background thread instead of synchronously.
@@ -201,15 +210,6 @@ terminal and restart ComfyUI.
   versions.
 - If you suspect a problem with sending to Eagle, try running again **without**
   `EAGLE_ASYNC_SEND` to fall back to synchronous sending.
-
-## Supported Nodes and Extensions
-- Metadata is obtained from the inputs of the KSampler node found by `sampler_selection_method` and the inputs of previously executed nodes
-  - The target KSampler nodes are the keys of `SAMPLERS` in [py/defs/samplers.py](py/defs/samplers.py) and files under [py/defs/ext/](py/defs/ext/)
-- Please check the following files for supported nodes.
-  - [py/defs/captures.py](py/defs/captures.py)
-  - [py/defs/samplers.py](py/defs/samplers.py)
-- Please check the following directory for supported extensions.
-  - [py/defs/ext/](py/defs/ext/)
 
 ## Change History
 - 2025/12/17 1.2.0 If the environment variable(`EAGLE_ASYNC_SEND`) is set, send to Eagle in a separate thread (experimental)
