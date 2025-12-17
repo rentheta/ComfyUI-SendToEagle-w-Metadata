@@ -97,6 +97,12 @@ def _shutdown_eagle_worker():
         
         # Wait for worker thread to exit
         thread_ref.join(timeout=_SHUTDOWN_TIMEOUT_SECONDS)
+        # After successful shutdown, clear global references to allow clean reuse
+        with _eagle_worker_lock:
+            # Only clear if globals still point to the same objects we shut down
+            if _eagle_send_queue is queue_ref and _eagle_worker_thread is thread_ref:
+                _eagle_send_queue = None
+                _eagle_worker_thread = None
 
 # Register shutdown handler to drain queue before exit
 atexit.register(_shutdown_eagle_worker)
