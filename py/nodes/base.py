@@ -102,32 +102,40 @@ def _shutdown_eagle_worker():
                 # Send shutdown signal
                 queue_ref.put(None)
     
-    # Wait for queue to drain and thread to finish (outside lock to avoid deadlock)
-    if queue_ref is not None and thread_ref is not None:
-        try:
-            # Wait for all pending tasks to complete
-            # Note: Queue.join() doesn't support timeout, so we rely on the
-            # worker thread timeout and the shutdown signal to prevent indefinite blocking
-            queue_ref.join()
-        except Exception as e:
-            print(f"[Eagle Async] Error draining queue: {e}")
-        
-        # Wait for worker thread to exit
-        thread_ref.join(timeout=_SHUTDOWN_TIMEOUT_SECONDS)
-        if thread_ref.is_alive():
-            print(
-                f"[Eagle Async] WARNING: Worker thread did not shut down within "
-                f"{_SHUTDOWN_TIMEOUT_SECONDS} seconds. Pending items may not have been "
-                "sent to Eagle."
-            )
-        # After successful shutdown, clear global references to allow clean reuse
+    try:
+        # Wait for queue to drain and thread to finish (outside lock to avoid deadlock)
+        if queue_ref is not None and thread_ref is not None:
+            try:
+                # Wait for all pending tasks to complete
+                # Note: Queue.join() doesn't support timeout, so we rely on the
+                # worker thread timeout and the shutdown signal to prevent indefinite blocking
+                queue_ref.join()
+            except Exception as e:
+                print(f"[Eagle Async] Error draining queue: {e}")
+            
+            # Wait for worker thread to exit
+            thread_ref.join(timeout=_SHUTDOWN_TIMEOUT_SECONDS)
+            if thread_ref.is_alive():
+                print(
+                    f"[Eagle Async] WARNING: Worker thread did not shut down within "
+                    f"{_SHUTDOWN_TIMEOUT_SECONDS} seconds. Pending items may not have been "
+                    "sent to Eagle."
+                )
+    finally:
+        # After shutdown attempt, clear global references if they still point to the
+        # same objects and the worker thread has actually stopped. Always reset the
+        # shutdown flag to allow future task enqueueing.
         with _eagle_worker_lock:
-            # Only clear if globals still point to the same objects we shut down
-            if _eagle_send_queue is queue_ref and _eagle_worker_thread is thread_ref:
+            if (
+                queue_ref is not None
+                and thread_ref is not None
+                and not thread_ref.is_alive()
+                and _eagle_send_queue is queue_ref
+                and _eagle_worker_thread is thread_ref
+            ):
                 _eagle_send_queue = None
                 _eagle_worker_thread = None
-                # Reset shutdown flag to allow future task enqueueing
-                _eagle_shutdown_in_progress = False
+            _eagle_shutdown_in_progress = False
 
 # Register shutdown handler to drain queue before exit
 atexit.register(_shutdown_eagle_worker)
