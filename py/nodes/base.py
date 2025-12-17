@@ -31,6 +31,7 @@ _eagle_send_queue = None
 _eagle_worker_thread = None
 _eagle_worker_lock = threading.Lock()
 _eagle_api_lock = threading.Lock()  # Lock for thread-safe EagleAPI access
+_SHUTDOWN_TIMEOUT_SECONDS = 30  # Maximum time to wait for queue to drain on shutdown
 
 def _eagle_worker():
     """Worker that retrieves tasks from the FIFO queue and sequentially sends them to Eagle"""
@@ -43,6 +44,8 @@ def _eagle_worker():
             if queue_ref is None:
                 break
         
+        # queue_ref is safe to use here - the Queue object remains valid
+        # even if _eagle_send_queue global reference changes
         task = queue_ref.get()
         if task is None:  # Shutdown signal
             queue_ref.task_done()
@@ -93,7 +96,7 @@ def _shutdown_eagle_worker():
             print(f"[Eagle Async] Error draining queue: {e}")
         
         # Wait for worker thread to exit
-        thread_ref.join(timeout=30)  # Wait up to 30 seconds
+        thread_ref.join(timeout=_SHUTDOWN_TIMEOUT_SECONDS)
 
 # Register shutdown handler to drain queue before exit
 atexit.register(_shutdown_eagle_worker)
