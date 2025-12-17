@@ -35,13 +35,14 @@ _eagle_api_lock = threading.Lock()  # Lock for thread-safe EagleAPI access
 def _eagle_worker():
     """Worker that retrieves tasks from the FIFO queue and sequentially sends them to Eagle"""
     global _eagle_send_queue
-    # Capture queue reference within lock to avoid race condition
-    with _eagle_worker_lock:
-        queue_ref = _eagle_send_queue
     
     while True:
-        if queue_ref is None:
-            break
+        # Access queue within lock each iteration to handle potential recreation
+        with _eagle_worker_lock:
+            queue_ref = _eagle_send_queue
+            if queue_ref is None:
+                break
+        
         task = queue_ref.get()
         if task is None:  # Shutdown signal
             queue_ref.task_done()
@@ -72,15 +73,27 @@ def _enqueue_eagle_send(eagle_api, data, folder_id, file_name):
 def _shutdown_eagle_worker():
     """Shutdown worker thread gracefully by draining the queue"""
     global _eagle_send_queue, _eagle_worker_thread
+    queue_ref = None
+    thread_ref = None
+    
     with _eagle_worker_lock:
         if _eagle_send_queue is not None and _eagle_worker_thread is not None:
             if _eagle_worker_thread.is_alive():
+                queue_ref = _eagle_send_queue
+                thread_ref = _eagle_worker_thread
                 # Send shutdown signal
-                _eagle_send_queue.put(None)
-                # Release lock before joining to allow worker to finish
-    # Join outside lock to avoid deadlock
-    if _eagle_worker_thread is not None and _eagle_worker_thread.is_alive():
-        _eagle_worker_thread.join(timeout=30)  # Wait up to 30 seconds for queue to drain
+                queue_ref.put(None)
+    
+    # Wait for queue to drain and thread to finish (outside lock to avoid deadlock)
+    if queue_ref is not None and thread_ref is not None:
+        try:
+            # Wait for all pending tasks to complete
+            queue_ref.join()
+        except Exception as e:
+            print(f"[Eagle Async] Error draining queue: {e}")
+        
+        # Wait for worker thread to exit
+        thread_ref.join(timeout=30)  # Wait up to 30 seconds
 
 # Register shutdown handler to drain queue before exit
 atexit.register(_shutdown_eagle_worker)
