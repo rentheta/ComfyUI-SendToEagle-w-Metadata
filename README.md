@@ -158,6 +158,50 @@ Refer to the table below for the identifiers specified in `<format>` of `%date:<
 | Hashes              | Outputs the hash values of Model, Lora_`n`, and Embedding_`n` separated by commas (for [Civitai](https://civitai.com/))<br>Note: Output only when `calc_model_hash` is `true`                         |
 | (Additional metadata) | Unique metadata entered in `extra_metadata`                                                                                                                                                     |
 
+## Asynchronous sending to Eagle (experimental)
+
+This extension can send items to Eagle in a background thread instead of synchronously.
+This may reduce the time spent waiting for Eagle during image generation, at the cost of
+using an in-memory queue.
+
+### How to enable
+
+Set the `EAGLE_ASYNC_SEND` environment variable to `1` **before** starting ComfyUI.
+
+Examples:
+
+- Linux / macOS (bash, zsh, etc.):
+  ```bash
+  export EAGLE_ASYNC_SEND=1
+  python main.py
+  ```
+- Windows (Command Prompt):
+  ```bat
+  set EAGLE_ASYNC_SEND=1
+  python main.py
+  ```
+- Windows (PowerShell):
+  ```powershell
+  $env:EAGLE_ASYNC_SEND = "1"
+  python .\main.py
+  ```
+
+To disable asynchronous sending, do not set `EAGLE_ASYNC_SEND`, or unset it / close the
+terminal and restart ComfyUI.
+
+### Behavior and limitations
+
+- When `EAGLE_ASYNC_SEND=1` is set, sending to Eagle is performed by a separate thread.
+- Generated images can finish processing in ComfyUI while sending to Eagle continues
+  in the background.
+- The send queue is **in-memory only**. If Python/ComfyUI is forcibly terminated
+  (e.g. crash, `kill -9`, power loss), items that are still queued may be **lost** and
+  never reach Eagle.
+- This feature is **experimental** and its behavior or availability may change in future
+  versions.
+- If you suspect a problem with sending to Eagle, try running again **without**
+  `EAGLE_ASYNC_SEND` to fall back to synchronous sending.
+
 ## Supported Nodes and Extensions
 - Metadata is obtained from the inputs of the KSampler node found by `sampler_selection_method` and the inputs of previously executed nodes
   - The target KSampler nodes are the keys of `SAMPLERS` in [py/defs/samplers.py](py/defs/samplers.py) and files under [py/defs/ext/](py/defs/ext/)
