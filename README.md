@@ -167,6 +167,50 @@ Refer to the table below for the identifiers specified in `<format>` of `%date:<
 - Please check the following directory for supported extensions.
   - [py/defs/ext/](py/defs/ext/)
 
+## Asynchronous sending to Eagle (experimental)
+
+This extension can send items to Eagle in a background thread instead of synchronously.
+This may reduce the time spent waiting for Eagle during image generation, at the cost of
+using an in-memory queue.
+
+### How to enable
+
+Set the `EAGLE_ASYNC_SEND` environment variable to `1` **before** starting ComfyUI.
+
+Examples:
+
+- Linux / macOS (bash, zsh, etc.):
+  ```bash
+  export EAGLE_ASYNC_SEND=1
+  python main.py
+  ```
+- Windows (Command Prompt):
+  ```bat
+  set EAGLE_ASYNC_SEND=1
+  python main.py
+  ```
+- Windows (PowerShell):
+  ```powershell
+  $env:EAGLE_ASYNC_SEND = "1"
+  python .\main.py
+  ```
+
+To disable asynchronous sending, do not set `EAGLE_ASYNC_SEND`, or unset it / close the
+terminal and restart ComfyUI.
+
+### Behavior and limitations
+
+- When `EAGLE_ASYNC_SEND=1` is set, sending to Eagle is performed by a separate thread.
+- Generated images can finish processing in ComfyUI while sending to Eagle continues
+  in the background.
+- The send queue is **in-memory only**. If Python/ComfyUI is forcibly terminated
+  (e.g. crash, `kill -9`, power loss), items that are still queued may be **lost** and
+  never reach Eagle.
+- This feature is **experimental** and its behavior or availability may change in future
+  versions.
+- If you suspect a problem with sending to Eagle, try running again **without**
+  `EAGLE_ASYNC_SEND` to fall back to synchronous sending.
+
 ## Change History
 - 2025/12/17 1.2.0 If the environment variable(`EAGLE_ASYNC_SEND`) is set, send to Eagle in a separate thread (experimental)
 - 2025/11/09 1.1.9 Fixed a bug where prompts were not saved in ComfyUI v0.3.68
