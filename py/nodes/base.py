@@ -3,6 +3,8 @@ import os
 import re
 import threading
 import queue
+import copy
+import atexit
 
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -24,29 +26,39 @@ from ..trace import Trace
 from ..defs.combo import SAMPLER_SELECTION_METHOD, TAG_PATTERN
 from ..utils.eagle_api import EagleAPI
 
-# グローバルな非同期送信キューとワーカースレッド
+# Global queue and worker thread for asynchronous Eagle sending
 _eagle_send_queue = None
 _eagle_worker_thread = None
 _eagle_worker_lock = threading.Lock()
+_eagle_api_lock = threading.Lock()  # Lock for thread-safe EagleAPI access
 
 def _eagle_worker():
-    """FIFOキューからタスクを取り出して順次Eagle送信を実行するワーカー"""
+    """Worker that retrieves tasks from the FIFO queue and sequentially sends them to Eagle"""
     global _eagle_send_queue
+    # Capture queue reference within lock to avoid race condition
+    with _eagle_worker_lock:
+        queue_ref = _eagle_send_queue
+    
     while True:
-        task = _eagle_send_queue.get()
-        if task is None:  # 終了シグナル
+        if queue_ref is None:
+            break
+        task = queue_ref.get()
+        if task is None:  # Shutdown signal
+            queue_ref.task_done()
             break
         try:
             eagle_api, data, folder_id, file_name = task
-            result = eagle_api.add_item_from_url(data=data, folder_id=folder_id)
+            # Use lock when accessing EagleAPI to prevent concurrent modification of folder_list
+            with _eagle_api_lock:
+                result = eagle_api.add_item_from_url(data=data, folder_id=folder_id)
             print(f"[Eagle Async] Sent successfully: {file_name} - {result}")
         except Exception as e:
             print(f"[Eagle Async] Failed to send {file_name}: {e}")
         finally:
-            _eagle_send_queue.task_done()
+            queue_ref.task_done()
 
 def _enqueue_eagle_send(eagle_api, data, folder_id, file_name):
-    """非同期送信キューにタスクを追加（必要に応じてワーカー起動）"""
+    """Add task to async send queue (start worker if needed)"""
     global _eagle_send_queue, _eagle_worker_thread
     with _eagle_worker_lock:
         if _eagle_send_queue is None:
@@ -54,7 +66,24 @@ def _enqueue_eagle_send(eagle_api, data, folder_id, file_name):
         if _eagle_worker_thread is None or not _eagle_worker_thread.is_alive():
             _eagle_worker_thread = threading.Thread(target=_eagle_worker, daemon=True)
             _eagle_worker_thread.start()
-    _eagle_send_queue.put((eagle_api, data, folder_id, file_name))
+        # Put task in queue while holding lock to ensure worker sees it
+        _eagle_send_queue.put((eagle_api, data, folder_id, file_name))
+
+def _shutdown_eagle_worker():
+    """Shutdown worker thread gracefully by draining the queue"""
+    global _eagle_send_queue, _eagle_worker_thread
+    with _eagle_worker_lock:
+        if _eagle_send_queue is not None and _eagle_worker_thread is not None:
+            if _eagle_worker_thread.is_alive():
+                # Send shutdown signal
+                _eagle_send_queue.put(None)
+                # Release lock before joining to allow worker to finish
+    # Join outside lock to avoid deadlock
+    if _eagle_worker_thread is not None and _eagle_worker_thread.is_alive():
+        _eagle_worker_thread.join(timeout=30)  # Wait up to 30 seconds for queue to drain
+
+# Register shutdown handler to drain queue before exit
+atexit.register(_shutdown_eagle_worker)
 
 class BaseNode:
     CATEGORY = "SendToEagle"
@@ -301,7 +330,7 @@ class SendToEagleWithMetadata(BaseNode):
 
                 # Eagleに送る
                 if self.async_send:
-                    _enqueue_eagle_send(self.eagle_api, item.copy(), folder_id, file_name)
+                    _enqueue_eagle_send(self.eagle_api, copy.deepcopy(item), folder_id, file_name)
                 else:
                     self.eagle_api.add_item_from_url(data=item, folder_id=folder_id)
 
