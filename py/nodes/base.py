@@ -97,6 +97,12 @@ def _shutdown_eagle_worker():
         
         # Wait for worker thread to exit
         thread_ref.join(timeout=_SHUTDOWN_TIMEOUT_SECONDS)
+        if thread_ref.is_alive():
+            print(
+                f"[Eagle Async] WARNING: Worker thread did not shut down within "
+                f"{_SHUTDOWN_TIMEOUT_SECONDS} seconds. Pending items may not have been "
+                "sent to Eagle."
+            )
         # After successful shutdown, clear global references to allow clean reuse
         with _eagle_worker_lock:
             # Only clear if globals still point to the same objects we shut down
