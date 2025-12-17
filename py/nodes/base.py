@@ -3,7 +3,6 @@ import os
 import re
 import threading
 import queue
-import copy
 import atexit
 
 from datetime import datetime
