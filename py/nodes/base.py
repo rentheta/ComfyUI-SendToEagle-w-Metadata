@@ -127,6 +127,8 @@ def _shutdown_eagle_worker():
             if _eagle_send_queue is queue_ref and _eagle_worker_thread is thread_ref:
                 _eagle_send_queue = None
                 _eagle_worker_thread = None
+                # Reset shutdown flag to allow future task enqueueing
+                _eagle_shutdown_in_progress = False
 
 # Register shutdown handler to drain queue before exit
 atexit.register(_shutdown_eagle_worker)
