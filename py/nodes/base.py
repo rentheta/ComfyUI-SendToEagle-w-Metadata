@@ -45,8 +45,18 @@ def _eagle_worker():
                 break
         
         # queue_ref is safe to use here - the Queue object remains valid
-        # even if _eagle_send_queue global reference changes
-        task = queue_ref.get()
+        # even if _eagle_send_queue global reference changes. However, we must
+        # avoid blocking forever on get() if the global queue is later cleared
+        # during shutdown. Use a timeout and periodically re-check the global
+        # reference under the lock.
+        try:
+            task = queue_ref.get(timeout=1.0)
+        except queue.Empty:
+            # On timeout, check if the worker should shut down.
+            with _eagle_worker_lock:
+                if _eagle_send_queue is None:
+                    break
+            continue
         if task is None:  # Shutdown signal
             queue_ref.task_done()
             break
