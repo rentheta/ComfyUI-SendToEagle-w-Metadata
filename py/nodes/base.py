@@ -31,6 +31,7 @@ _eagle_send_queue = None
 _eagle_worker_thread = None
 _eagle_worker_lock = threading.Lock()
 _eagle_api_lock = threading.Lock()  # Lock for thread-safe EagleAPI access
+_eagle_shutdown_in_progress = False  # Flag to prevent new tasks during shutdown
 _SHUTDOWN_TIMEOUT_SECONDS = 30  # Maximum time to wait for queue to drain on shutdown
 
 def _eagle_worker():
@@ -73,8 +74,11 @@ def _eagle_worker():
 
 def _enqueue_eagle_send(eagle_api, data, folder_id, file_name):
     """Add task to async send queue (start worker if needed)"""
-    global _eagle_send_queue, _eagle_worker_thread
+    global _eagle_send_queue, _eagle_worker_thread, _eagle_shutdown_in_progress
     with _eagle_worker_lock:
+        # Prevent enqueueing new tasks during shutdown
+        if _eagle_shutdown_in_progress:
+            raise RuntimeError("Cannot enqueue tasks during shutdown")
         if _eagle_send_queue is None:
             _eagle_send_queue = queue.Queue()
         if _eagle_worker_thread is None or not _eagle_worker_thread.is_alive():
@@ -85,11 +89,13 @@ def _enqueue_eagle_send(eagle_api, data, folder_id, file_name):
 
 def _shutdown_eagle_worker():
     """Shutdown worker thread gracefully by draining the queue"""
-    global _eagle_send_queue, _eagle_worker_thread
+    global _eagle_send_queue, _eagle_worker_thread, _eagle_shutdown_in_progress
     queue_ref = None
     thread_ref = None
     
     with _eagle_worker_lock:
+        # Set shutdown flag to prevent new tasks from being enqueued
+        _eagle_shutdown_in_progress = True
         if _eagle_send_queue is not None and _eagle_worker_thread is not None:
             if _eagle_worker_thread.is_alive():
                 queue_ref = _eagle_send_queue
@@ -101,6 +107,8 @@ def _shutdown_eagle_worker():
     if queue_ref is not None and thread_ref is not None:
         try:
             # Wait for all pending tasks to complete
+            # Note: Queue.join() doesn't support timeout, so we rely on the
+            # worker thread timeout and the shutdown signal to prevent indefinite blocking
             queue_ref.join()
         except Exception as e:
             print(f"[Eagle Async] Error draining queue: {e}")
@@ -119,6 +127,8 @@ def _shutdown_eagle_worker():
             if _eagle_send_queue is queue_ref and _eagle_worker_thread is thread_ref:
                 _eagle_send_queue = None
                 _eagle_worker_thread = None
+                # Reset shutdown flag to allow future task enqueueing
+                _eagle_shutdown_in_progress = False
 
 # Register shutdown handler to drain queue before exit
 atexit.register(_shutdown_eagle_worker)
@@ -332,7 +342,9 @@ class SendToEagleWithMetadata(BaseNode):
                 eagle_folder_value = self._select_batch_value(eagle_folder_source, index, "")
                 folder_cache_key = eagle_folder_value or ""
                 if folder_cache_key not in folder_id_cache:
-                    folder_id_cache[folder_cache_key] = self.eagle_api.find_or_create_folder(eagle_folder_value)
+                    # Use lock to ensure thread-safe access to EagleAPI
+                    with _eagle_api_lock:
+                        folder_id_cache[folder_cache_key] = self.eagle_api.find_or_create_folder(eagle_folder_value)
                 folder_id = folder_id_cache[folder_cache_key]
 
                 # Eagleに送るURLを作成
@@ -370,11 +382,17 @@ class SendToEagleWithMetadata(BaseNode):
                 if self.async_send:
                     try:
                         _enqueue_eagle_send(self.eagle_api, item.copy(), folder_id, file_name)
-                    except Exception:
-                        # If async enqueue fails, fall back to synchronous send
-                        self.eagle_api.add_item_from_url(data=item, folder_id=folder_id)
+                    except Exception as e:
+                        # Log the exception and fall back to synchronous send
+                        print(f"[Eagle Async] Failed to enqueue {file_name}: {e}")
+                        print("[Eagle Async] Falling back to synchronous send")
+                        # Use lock for synchronous send as well to ensure thread safety
+                        with _eagle_api_lock:
+                            self.eagle_api.add_item_from_url(data=item, folder_id=folder_id)
                 else:
-                    self.eagle_api.add_item_from_url(data=item, folder_id=folder_id)
+                    # Use lock for synchronous send to ensure thread safety
+                    with _eagle_api_lock:
+                        self.eagle_api.add_item_from_url(data=item, folder_id=folder_id)
 
             results.append(
                 {"filename": file_name, "subfolder": subfolder, "type": self.type}
