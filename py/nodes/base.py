@@ -369,7 +369,7 @@ class SendToEagleWithMetadata(BaseNode):
                 # Eagleに送る
                 if self.async_send:
                     try:
-                        _enqueue_eagle_send(self.eagle_api, copy.deepcopy(item), folder_id, file_name)
+                        _enqueue_eagle_send(self.eagle_api, item.copy(), folder_id, file_name)
                     except Exception:
                         # If async enqueue fails, fall back to synchronous send
                         self.eagle_api.add_item_from_url(data=item, folder_id=folder_id)
