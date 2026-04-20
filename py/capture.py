@@ -25,14 +25,23 @@ class _ExecutionListProxy:
     def __init__(self, outputs_cache):
         self._outputs_cache = outputs_cache
 
+    def _resolve(self, node_id):
+        # ComfyUI changed cache.get() to async (v0.3.66+, continued in v0.19.x).
+        # Prefer the synchronous get_local() helper when the cache exposes it,
+        # otherwise fall back to get() for older ComfyUI versions.
+        cache = self._outputs_cache
+        if hasattr(cache, 'get_local'):
+            return cache.get_local(node_id)
+        return cache.get(node_id)
+
     def get(self, node_id):
-        return self._outputs_cache.get(node_id)
+        return self._resolve(node_id)
 
     def get_cache(self, node_id, _to_node_id):
-        return self._outputs_cache.get(node_id)
+        return self._resolve(node_id)
 
     def get_output_cache(self, node_id, _to_node_id):
-        return self._outputs_cache.get(node_id)
+        return self._resolve(node_id)
 
 
 class Capture:

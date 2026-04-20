@@ -1,6 +1,31 @@
-# ComfyUI-SendToEagle-w-Metadata
+# ComfyUI-SendToEagle-w-Metadata (rentheta fork)
 
 [English] [<a href="README_ja.md">日本語</a>]
+
+> **About this fork**
+>
+> Patches a metadata-drop regression on recent ComfyUI builds (v0.3.66+ and the current v0.19.x line).
+> See [upstream issue #24](https://github.com/watarika/ComfyUI-SendToEagle-w-Metadata/issues/24).
+>
+> **Symptom**
+> - Images are saved to Eagle, but prompt / seed / steps / CFG / sampler /
+>   scheduler / LoRA metadata are missing. Only non-linked fields (model name,
+>   VAE, width/height) survive.
+>
+> **Root cause**
+> - ComfyUI changed `comfy_execution/caching.py`'s `cache.get()` into an async
+>   coroutine. `_ExecutionListProxy.get_cache()` in `py/capture.py` still called
+>   it synchronously and received a coroutine instead of the cached outputs.
+>   `get_input_data()` raised `AttributeError`, which `Capture.get_inputs()`
+>   swallowed via `try/except`, silently dropping every metadata field sourced
+>   from a linked input.
+>
+> **Fix**
+> - `_ExecutionListProxy` now prefers the synchronous `get_local()` helper when
+>   the cache exposes it (new ComfyUI), and falls back to `get()` on older
+>   versions. See `py/capture.py::_ExecutionListProxy._resolve`.
+
+---
 
 - A custom node for [ComfyUI](https://github.com/comfyanonymous/ComfyUI)
 - Sends images with metadata (PNGInfo) obtained from the input values of each node to [Eagle](https://en.eagle.cool/) (image management software)

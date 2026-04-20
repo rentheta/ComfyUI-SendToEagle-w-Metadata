@@ -1,6 +1,31 @@
-# ComfyUI-SendToEagle-w-Metadata
+# ComfyUI-SendToEagle-w-Metadata (rentheta fork)
 
 [<a href="README.md">English</a>] [日本語]
+
+> **このForkについて**
+>
+> 最近の ComfyUI (v0.3.66+ および現行の v0.19.x 系) で発生しているメタデータ欠落の不具合を修正したForkです。
+> 上流 [Issue #24](https://github.com/watarika/ComfyUI-SendToEagle-w-Metadata/issues/24) 参照。
+>
+> **症状**
+> - 画像はEagleに保存されるが、プロンプト / seed / steps / CFG / sampler /
+>   scheduler / LoRA 等のメタデータが送信されない。
+> - リンク入力を持たないフィールド（モデル名・VAE・解像度）のみ残る。
+>
+> **原因**
+> - ComfyUI が `comfy_execution/caching.py` の `cache.get()` を async コルーチンに変更。
+>   `py/capture.py` の `_ExecutionListProxy.get_cache()` が従来どおり同期的に呼んでいたため、
+>   キャッシュの代わりに coroutine オブジェクトが返っていた。
+> - その結果 `get_input_data()` が `AttributeError` を送出し、
+>   `Capture.get_inputs()` 側の `try/except` で握り潰され、
+>   リンク入力由来のメタデータが全て黙って欠落していた。
+>
+> **修正**
+> - `_ExecutionListProxy` に `_resolve()` を追加し、キャッシュが `get_local()` を
+>   公開していれば同期版を優先使用、無ければ従来の `get()` にフォールバック。
+>   `py/capture.py::_ExecutionListProxy._resolve` 参照。
+
+---
 
 - [ComfyUI](https://github.com/comfyanonymous/ComfyUI) 用のカスタムノードです
 - 各ノードの入力値から取得したメタデータ (PNGInfo) つきの画像を [Eagle](https://jp.eagle.cool/) (画像管理ソフト) に送信します
