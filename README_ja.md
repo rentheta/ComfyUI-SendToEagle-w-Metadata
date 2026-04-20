@@ -34,10 +34,34 @@
 - Eagleのメモ欄に任意の文字列やメタデータを保存することができます
 
 ## インストール手順
+
+### 既に古い/壊れた状態のものが入っている場合
+
+下記の順番で作業してください。どれか1つでも抜けると「直らない」原因になります（実際によくある落とし穴です）：
+
+1. **既存フォルダは `custom_nodes/` の外に移動**してください（中で `.bak` にリネームするだけではNG）。
+   `ComfyUI-SendToEagle-w-Metadata.bak` や `...-old` のような名前で
+   `custom_nodes/` 内に残っていると、ComfyUIが両方スキャンしてしまい、
+   古いほうが読まれる場合があります。
+2. 旧フォルダ側の **`__pycache__/` を削除** してから移動する、または
+   新しく clone する前に古い `.pyc` が残らないようにしてください。
+3. **fork を clone** してください（下記）。フォルダ名は必ず
+   `ComfyUI-SendToEagle-w-Metadata` にしてください。
+   `git clone` が `-main` などの suffix 付きで作ってしまったらリネームしてください。
+4. **ComfyUI のプロセスを完全に再起動**してください
+   （サーバーを一度止めて起動し直す。ブラウザのリロードだけでは反映されません）。
+5. 起動時のコンソールログで `Import times for custom nodes:` のセクションに
+   `ComfyUI-SendToEagle-w-Metadata` が**エラーなくロードされていること**を確認してください。
+
+### clone
+
 ```
 cd <ComfyUIがあるディレクトリ>/custom_nodes
-git clone https://github.com/watarika/ComfyUI-SendToEagle-w-Metadata.git
+git clone https://github.com/rentheta/ComfyUI-SendToEagle-w-Metadata.git
 ```
+
+> 上流を使う場合（参考）:
+> `git clone https://github.com/watarika/ComfyUI-SendToEagle-w-Metadata.git`
 
 ## カスタムノード一覧
 

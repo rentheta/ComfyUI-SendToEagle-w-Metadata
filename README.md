@@ -35,10 +35,34 @@
 
 ## Installation
 
+### If you already have an older/broken copy installed
+
+Please follow these steps in order — skipping any of them is the most common reason the patch appears not to work:
+
+1. **Move the existing folder out of `custom_nodes/`** (not just rename it inside).
+   Any leftover copy like `ComfyUI-SendToEagle-w-Metadata.bak` or `...-old`
+   kept inside `custom_nodes/` will still be scanned by ComfyUI and may shadow
+   the new one.
+2. **Delete `__pycache__/`** under the old folder before moving, or make sure the
+   fresh clone does not contain any stale `.pyc` files.
+3. **Clone the fork** (see below). The resulting folder must be named exactly
+   `ComfyUI-SendToEagle-w-Metadata` — rename it if `git clone` produced
+   something else (e.g. `-main`).
+4. **Fully restart the ComfyUI process** (stop and start the server — a browser
+   reload is not enough).
+5. On startup, check the ComfyUI console: the line
+   `ComfyUI-SendToEagle-w-Metadata` should appear under
+   `Import times for custom nodes:` without an error.
+
+### Clone
+
 ```
 cd <ComfyUI directory>/custom_nodes
-git clone https://github.com/watarika/ComfyUI-SendToEagle-w-Metadata.git
+git clone https://github.com/rentheta/ComfyUI-SendToEagle-w-Metadata.git
 ```
+
+> Upstream install (for reference):
+> `git clone https://github.com/watarika/ComfyUI-SendToEagle-w-Metadata.git`
 
 ## List of Custom Nodes
 
